@@ -7,9 +7,13 @@ file(
     GLOB SOURCES
     uSockets/src/*.c
     uSockets/src/eventing/*.c
+    uSockets/src/io_uring/*.c
+    uSockets/src/crypto/openssl.c
+    uSockets/src/crypto/sni_tree.cpp
 )
 add_library(uSockets ${SOURCES})
-target_compile_definitions(uSockets PUBLIC WITH_IO_URING LIBUS_NO_SSL)
+target_link_libraries(uSockets ssl crypto)
+target_compile_definitions(uSockets PUBLIC LIBUS_USE_OPENSSL)
 target_include_directories(uSockets PUBLIC uSockets/src)
 
 add_library(uWebSockets INTERFACE)
