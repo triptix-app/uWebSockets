@@ -46,7 +46,7 @@ static const int HTTP_TIMEOUT_S = 10;
 template <bool SSL>
 struct HttpResponse : public AsyncSocket<SSL> {
     /* Solely used for getHttpResponseData() */
-    template <bool> friend struct TemplatedApp;
+    template <bool, typename> friend struct TemplatedApp;
     typedef AsyncSocket<SSL> Super;
 private:
     HttpResponseData<SSL> *getHttpResponseData() {
@@ -496,13 +496,14 @@ public:
     /* Corks the response if possible. Leaves already corked socket be. */
     HttpResponse *cork(MoveOnlyFunction<void()> &&handler) {
         if (!Super::isCorked() && Super::canCork()) {
+            LoopData *loopData = Super::getLoopData();
             Super::cork();
             handler();
 
             /* The only way we could possibly have changed the corked socket during handler call, would be if 
              * the HTTP socket was upgraded to WebSocket and caused a realloc. Because of this we cannot use "this"
              * from here downwards. The corking is done with corkUnchecked() in upgrade. It steals cork. */
-            auto *newCorkedSocket = Super::corkedSocket();
+            auto *newCorkedSocket = loopData->corkedSocket;
 
             /* If nobody is corked, it means most probably that large amounts of data has
              * been written and the cork buffer has already been sent off and uncorked.

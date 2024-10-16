@@ -8,7 +8,7 @@ void testMethodPriority() {
     uWS::HttpRouter<int> r;
     std::string result;
 
-    r.add(r.upperCasedMethods, "/static/route", [&result](auto *) {
+    r.add({"*"}, "/static/route", [&result](auto *) {
         std::cout << "ANY static route" << std::endl;
         result += "AS";
         return true;
@@ -26,9 +26,9 @@ void testMethodPriority() {
         return true;
     });
 
-    assert(r.route("nonsense", "/static/route") == false);
+    assert(r.route("nonsense", "/static/route") == true);
     assert(r.route("GET", "/static") == false);
-    assert(result == "");
+    assert(result == "AS");
 
     /* Should end up directly in ANY handler */
     result.clear();
@@ -46,12 +46,40 @@ void testMethodPriority() {
     assert(result == "PSAS");
 }
 
+void testDeepParameterRoutes() {
+    std::cout << "TestDeepParameterRoutes" << std::endl;
+    uWS::HttpRouter<int> r;
+    std::string result;
+
+    r.add({"GET"}, "/something/:id/sync", [&result](auto *h) {
+        result += "ETT";
+        return false;
+    });
+
+    r.add({"GET"}, "/something/:somethingId/pin", [&result](auto *h) {
+        result += "TVÅ";
+        return false;
+    });
+
+    r.add({"GET"}, "/something/:id/:attribute", [&result](auto *h) {
+        result += "TRE";
+        return false;
+    });
+
+    assert(r.route("GET", "/something/1234/pin") == false);
+    assert(result == "TVÅTRE");
+
+    result.clear();
+    assert(r.route("GET", "/something/1234/sync") == false);
+    assert(result == "ETTTRE");
+}
+
 void testPatternPriority() {
     std::cout << "TestPatternPriority" << std::endl;
     uWS::HttpRouter<int> r;
     std::string result;
 
-    r.add(r.upperCasedMethods, "/a/b/c", [&result](auto *) {
+    r.add({"*"}, "/a/b/c", [&result](auto *) {
         std::cout << "ANY static route" << std::endl;
         result += "AS";
         return false;
@@ -81,18 +109,18 @@ void testPatternPriority() {
         return false;
     });
 
-    r.add(r.upperCasedMethods, "/a/:b/c", [&result](auto *) {
+    r.add({"*"}, "/a/:b/c", [&result](auto *) {
         std::cout << "ANY parameter route" << std::endl;
         result += "AP";
         return false;
     }, r.LOW_PRIORITY);
 
     assert(r.route("POST", "/a/b/c") == false);
-    assert(result == "ASPPAP");
+    assert(result == "PPASAP");
 
     result.clear();
     assert(r.route("GET", "/a/b/c") == false);
-    assert(result == "GSASGPAPGW");
+    assert(result == "GSGPGWASAP");
 }
 
 void testUpgrade() {
@@ -224,7 +252,7 @@ void testBugReports() {
         }, r.MEDIUM_PRIORITY);
 
         /* ANY on /* */
-        r.add(r.upperCasedMethods, "/*", [&result](auto *) {
+        r.add({"*"}, "/*", [&result](auto *) {
             result += "AW";
             return false;
         }, r.LOW_PRIORITY);
@@ -256,7 +284,7 @@ void testBugReports() {
         }, r.MEDIUM_PRIORITY);
 
         /* ANY on /* */
-        r.add(r.upperCasedMethods, "/*", [&result](auto *) {
+        r.add({"*"}, "/*", [&result](auto *) {
             result += "AW";
             return false;
         }, r.LOW_PRIORITY);
@@ -376,10 +404,37 @@ void testParameters() {
     assert(result == "GLWGPW");
 }
 
+#include <chrono>
+
+void testPerformance() {
+    std::cout << "TestPerformance" << std::endl;
+    uWS::HttpRouter<int> r;
+
+    r.add({"GET"}, "/*", [](auto *h) {
+        return true;
+    });
+
+    r.add({"*"}, "/*", [](auto *h) {
+        return true;
+    });
+
+    auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 1000000; i++) {
+        r.route("GET", "/something");
+        r.route("other", "/whatever");
+    }
+    auto end = std::chrono::steady_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Duration: " << duration << "ms" << std::endl;
+}
+
 int main() {
+    testDeepParameterRoutes();
     testPatternPriority();
     testMethodPriority();
     testUpgrade();
     testBugReports();
     testParameters();
+    testPerformance();
 }

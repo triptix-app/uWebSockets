@@ -8,8 +8,16 @@ int main() {
 	  .key_file_name = "misc/key.pem",
 	  .cert_file_name = "misc/cert.pem",
 	  .passphrase = "1234"
-	}).oneRouteCatchAll(true).get("/*", [](auto *res, auto */*req*/) {
-	    res->end("Hello world!");
+	}).get("/:first/static/:second", [](auto *res, auto *req) {
+
+		res->write("<h1>first is: ");
+		res->write(req->getParameter("first"));
+		res->write("</h1>");
+
+		res->write("<h1>second is: ");
+		res->write(req->getParameter("second"));
+		res->end("</h1>");
+
 	}).listen(3000, [](auto *listen_socket) {
 	    if (listen_socket) {
 			std::cout << "Listening on port " << 3000 << std::endl;

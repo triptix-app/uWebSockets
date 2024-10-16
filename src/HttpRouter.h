@@ -35,9 +35,9 @@ namespace uWS {
 
 template <class USERDATA>
 struct HttpRouter {
-    /* These are public for now */
-    std::vector<std::string> upperCasedMethods = {"GET", "POST", "HEAD", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH"};
+    static constexpr std::string_view ANY_METHOD_TOKEN = "*";
     static const uint32_t HIGH_PRIORITY = 0xd0000000, MEDIUM_PRIORITY = 0xe0000000, LOW_PRIORITY = 0xf0000000;
+    bool firstRouteCatchAll = false;
 
 private:
     USERDATA userData;
@@ -45,9 +45,6 @@ private:
 
     /* Handler ids are 32-bit */
     static const uint32_t HANDLER_MASK = 0x0fffffff;
-
-    /* Methods and their respective priority */
-    std::map<std::string, int> priority;
 
     /* List of handlers */
     std::vector<MoveOnlyFunction<bool(HttpRouter *)>> handlers;
@@ -138,7 +135,7 @@ private:
     inline std::pair<std::string_view, bool> getUrlSegment(int urlSegment) {
         if (urlSegment > urlSegmentTop) {
             /* Signal as STOP when we have no more URL or stack space */
-            if (!currentUrl.length() || urlSegment > 99) {
+            if (!currentUrl.length() || urlSegment > int(MAX_URL_SEGMENTS - 1)) {
                 return {{}, true};
             }
 
@@ -245,10 +242,8 @@ private:
 
 public:
     HttpRouter() {
-        int p = 0;
-        for (std::string &method : upperCasedMethods) {
-            priority[method] = p++;
-        }
+        /* Always have ANY route */
+        getNode(&root, std::string(ANY_METHOD_TOKEN.data(), ANY_METHOD_TOKEN.length()), false);
     }
 
     std::pair<int, std::string_view *> getParameters() {
@@ -265,27 +260,44 @@ public:
         setUrl(url);
         routeParameters.reset();
 
+        /* When you only have 1 handler, you're most likely not using the router */
+        if (firstRouteCatchAll) {
+            return handlers[0](this);
+        }
+
         /* Begin by finding the method node */
         for (auto &p : root.children) {
             if (p->name == method) {
                 /* Then route the url */
-                return executeHandlers(p.get(), 0, userData);
+                if (executeHandlers(p.get(), 0, userData)) {
+                    return true;
+                } else {
+                    break;
+                }
             }
         }
 
-        /* We did not find any handler for this method and url */
-        return false;
+        /* Always test any route last */
+        return executeHandlers(root.children.back().get(), 0, userData);
     }
 
     /* Adds the corresponding entires in matching tree and handler list */
     void add(std::vector<std::string> methods, std::string pattern, MoveOnlyFunction<bool(HttpRouter *)> &&handler, uint32_t priority = MEDIUM_PRIORITY) {
+        /* First remove existing handler */
+        remove(methods[0], pattern, priority);
+        
         for (std::string method : methods) {
             /* Lookup method */
             Node *node = getNode(&root, method, false);
             /* Iterate over all segments */
             setUrl(pattern);
             for (int i = 0; !getUrlSegment(i).second; i++) {
-                node = getNode(node, std::string(getUrlSegment(i).first), priority == HIGH_PRIORITY);
+                std::string strippedSegment(getUrlSegment(i).first);
+                if (strippedSegment.length() && strippedSegment[0] == ':') {
+                    /* Parameter routes must be named only : */
+                    strippedSegment = ":";
+                }
+                node = getNode(node, strippedSegment, priority == HIGH_PRIORITY);
             }
             /* Insert handler in order sorted by priority (most significant 1 byte) */
             node->handlers.insert(std::upper_bound(node->handlers.begin(), node->handlers.end(), (uint32_t) (priority | handlers.size())), (uint32_t) (priority | handlers.size()));
@@ -294,11 +306,21 @@ public:
         /* Alloate this handler */
         handlers.emplace_back(std::move(handler));
 
-        /* Assume can find this handler again */
-        if (((handlers.size() - 1) | priority) != findHandler(methods[0], pattern, priority)) {
-            std::cerr << "Error: Internal routing error" << std::endl;
-            std::abort();
-        }
+        /* ANY method must be last, GET must be first */
+        std::sort(root.children.begin(), root.children.end(), [](const auto &a, const auto &b) {
+            /* Assuming the list of methods is unique, non-repeating */
+            if (a->name == "GET") {
+                return true;
+            } else if (b->name == "GET") {
+                return false;
+            } else if (a->name == ANY_METHOD_TOKEN) {
+                return false;
+            } else if (b->name == ANY_METHOD_TOKEN) {
+                return true;
+            } else {
+                return a->name < b->name;
+            }
+        });
     }
 
     bool cullNode(Node *parent, Node *node, uint32_t handler) {
