@@ -93,6 +93,13 @@ public:
 
     TopicTree<TopicTreeMessage, TopicTreeBigMessage> *topicTree = nullptr;
 
+    /* Used if you don't really need the URL router. */
+    BuilderPatternReturnType &&oneRouteCatchAll(bool enabled) {
+        httpContext->getSocketContextData()->router.firstRouteCatchAll = enabled;
+
+        return std::move(static_cast<BuilderPatternReturnType &&>(*this));
+    }
+
     /* Server name */
     BuilderPatternReturnType &&addServerName(std::string hostname_pattern, SocketContextOptions options = {}) {
 

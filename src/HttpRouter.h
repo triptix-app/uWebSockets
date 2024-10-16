@@ -37,6 +37,7 @@ template <class USERDATA>
 struct HttpRouter {
     static constexpr std::string_view ANY_METHOD_TOKEN = "*";
     static const uint32_t HIGH_PRIORITY = 0xd0000000, MEDIUM_PRIORITY = 0xe0000000, LOW_PRIORITY = 0xf0000000;
+    bool firstRouteCatchAll = false;
 
 private:
     USERDATA userData;
@@ -258,6 +259,11 @@ public:
         /* Reset url parsing cache */
         setUrl(url);
         routeParameters.reset();
+
+        /* When you only have 1 handler, you're most likely not using the router */
+        if (firstRouteCatchAll) {
+            return handlers[0](this);
+        }
 
         /* Begin by finding the method node */
         for (auto &p : root.children) {
