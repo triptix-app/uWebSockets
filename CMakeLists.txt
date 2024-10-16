@@ -14,8 +14,8 @@ file(
 add_library(uSockets ${SOURCES})
 #target_link_libraries(uSockets ssl crypto)
 target_compile_definitions(uSockets PUBLIC LIBUS_NO_SSL)
-target_include_directories(uSockets PUBLIC uSockets/src)
+target_include_directories(uSockets SYSTEM PUBLIC uSockets/src)
 
 add_library(uWebSockets INTERFACE)
-target_include_directories(uWebSockets INTERFACE src)
+target_include_directories(uWebSockets SYSTEM INTERFACE src)
 target_link_libraries(uWebSockets INTERFACE uSockets zlibstatic)
