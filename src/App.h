@@ -577,8 +577,14 @@ public:
         return std::move(static_cast<BuilderPatternReturnType &&>(*this));
     }
 
+    /* Set a pointer to user data that will be used as a parameter to provided callbacks */
+    BuilderPatternReturnType &&setUserData(void* user_data) {
+        us_socket_context_set_user_data(httpContext->getSocketContext(), user_data);
+        return std::move(static_cast<BuilderPatternReturnType &&>(*this));
+    }
+
     /* Register event handler for accepted FD. Can be used together with adoptSocket. */
-    BuilderPatternReturnType &&preOpen(LIBUS_SOCKET_DESCRIPTOR (*handler)(struct us_socket_context_t *, LIBUS_SOCKET_DESCRIPTOR)) {
+    BuilderPatternReturnType &&preOpen(LIBUS_SOCKET_DESCRIPTOR (*handler)(struct us_socket_context_t *, LIBUS_SOCKET_DESCRIPTOR, void*)) {
         httpContext->onPreOpen(handler);
         return std::move(static_cast<BuilderPatternReturnType &&>(*this));
     }
